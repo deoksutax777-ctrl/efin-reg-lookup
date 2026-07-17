@@ -189,6 +189,26 @@
   </div>
 
   <div class="card">
+    <label>기간평균환율 (산술평균)</label>
+    <div class="row">
+      <div class="field">
+        <label for="period-from-input">시작일</label>
+        <input type="date" id="period-from-input">
+      </div>
+      <div class="field">
+        <label for="period-to-input">종료일</label>
+        <input type="date" id="period-to-input">
+      </div>
+    </div>
+    <div class="hint">해당 기간 영업일(고시일) 매매기준율의 단순 산술평균입니다.</div>
+
+    <div class="result" id="period-result-box">
+      <span class="rate" id="period-rate-value">-</span><span class="unit" id="period-rate-unit"></span>
+      <div id="period-result-badge"></div>
+    </div>
+  </div>
+
+  <div class="card">
     <label>외화·원화 환산</label>
     <div class="calc-row">
       <div class="field">
@@ -360,6 +380,11 @@ const foreignInput = document.getElementById('foreign-input');
 const krwInput = document.getElementById('krw-input');
 const foreignUnitLabel = document.getElementById('foreign-unit-label');
 const metaInfo = document.getElementById('meta-info');
+const periodFromInput = document.getElementById('period-from-input');
+const periodToInput = document.getElementById('period-to-input');
+const periodRateValue = document.getElementById('period-rate-value');
+const periodRateUnit = document.getElementById('period-rate-unit');
+const periodResultBadge = document.getElementById('period-result-badge');
 
 let currentRate = null;
 let isSyncing = false;
@@ -460,13 +485,58 @@ krwInput.addEventListener('input', () => {
   isSyncing = false;
 });
 
+function initPeriod() {
+  const dates = Object.keys(FX_DATA.rates[currencyInput.value] || {}).sort();
+  periodFromInput.min = periodToInput.min = dates[0];
+  periodFromInput.max = periodToInput.max = FX_DATA.period_to;
+  if (!periodFromInput.value) periodFromInput.value = dates[0];
+  if (!periodToInput.value) periodToInput.value = dates[dates.length - 1];
+}
+
+function updatePeriodAverage() {
+  const code = currencyInput.value;
+  const table = FX_DATA.rates[code] || {};
+  const allDates = Object.keys(table).sort();
+  const from = periodFromInput.value;
+  const to = periodToInput.value;
+
+  if (!from || !to || from > to) {
+    periodRateValue.textContent = '-';
+    periodRateUnit.textContent = '';
+    periodResultBadge.innerHTML = (from && to && from > to)
+      ? `<span class="badge none">시작일이 종료일보다 늦습니다</span>` : '';
+    return;
+  }
+
+  const matched = allDates.filter(d => d >= from && d <= to);
+  if (!matched.length) {
+    periodRateValue.textContent = '데이터 없음';
+    periodRateUnit.textContent = '';
+    periodResultBadge.innerHTML = `<span class="badge none">해당 기간에 고시된 환율이 없습니다 (스냅샷 범위: ${allDates[0]} ~ ${allDates[allDates.length - 1]})</span>`;
+    return;
+  }
+
+  const avg = matched.reduce((s, d) => s + table[d], 0) / matched.length;
+  periodRateValue.textContent = fmt(avg, 2);
+  periodRateUnit.textContent = `원 / 1 ${code} (${matched.length}영업일 평균)`;
+
+  const outOfSnapshot = from < allDates[0] || to > allDates[allDates.length - 1];
+  periodResultBadge.innerHTML = outOfSnapshot
+    ? `<span class="badge fallback">요청 범위 중 스냅샷 보유분 ${matched[0]} ~ ${matched[matched.length - 1]}만 반영 (스냅샷 범위: ${allDates[0]} ~ ${allDates[allDates.length - 1]})</span>`
+    : '';
+}
+
 dateInput.addEventListener('change', updateResult);
-currencyInput.addEventListener('change', () => { initDate(); updateResult(); });
+currencyInput.addEventListener('change', () => { initDate(); updateResult(); initPeriod(); updatePeriodAverage(); });
+periodFromInput.addEventListener('change', updatePeriodAverage);
+periodToInput.addEventListener('change', updatePeriodAverage);
 
 initMeta();
 initCurrencySelect();
 initDate();
 updateResult();
+initPeriod();
+updatePeriodAverage();
 </script>
 </body>
 </html>
