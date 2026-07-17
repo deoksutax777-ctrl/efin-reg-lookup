@@ -254,7 +254,7 @@ const MAX_MATCHES = 50;
 function search(query) {
   const qn = normalize(query);
   if (!qn) return { entries: [], truncatedFrom: 0 };
-  const matched = ALL_KEYS.filter(k => k.includes(qn) || qn.includes(k));
+  const matched = ALL_KEYS.filter(k => k.includes(qn));
   const truncatedFrom = matched.length > MAX_MATCHES ? matched.length : 0;
   return { entries: matched.slice(0, MAX_MATCHES).map(k => INDEX.get(k)), truncatedFrom };
 }
