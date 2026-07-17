@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>환율조회 - 매매기준율 조회</title>
+<style>
+  :root {
+    --main: #00338D;
+    --main-dark: #001F5C;
+    --main-light: #e7f0ff;
+    --gold: #C5A44E;
+    --gold-light: #faf3e2;
+    --bg: #f5f7fa;
+    --card: #ffffff;
+    --border: #dde3ec;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --warn: #b3261e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Malgun Gothic", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  header {
+    background: var(--main);
+    color: #fff;
+    padding: 22px 28px;
+    border-bottom: 3px solid var(--gold);
+  }
+  header h1 {
+    margin: 0 0 4px 0;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  header p {
+    margin: 0;
+    font-size: 13px;
+    color: #cfe0ff;
+  }
+  .site-nav { margin-top: 12px; font-size: 13px; }
+  .site-nav a {
+    color: #cfe0ff;
+    text-decoration: none;
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.25);
+    margin-right: 8px;
+  }
+  .site-nav a.active { background: #fff; color: var(--main); font-weight: 700; border-color: #fff; }
+  .site-nav a:hover:not(.active) { background: rgba(255,255,255,0.12); }
+  main {
+    max-width: 720px;
+    margin: 24px auto 60px;
+    padding: 0 20px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .meta {
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .meta b { color: var(--main); }
+  label {
+    display: block;
+    font-weight: 600;
+    font-size: 13.5px;
+    margin-bottom: 6px;
+    color: var(--main);
+  }
+  .row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .field { flex: 1; min-width: 160px; }
+  input[type="date"], input[type="text"], select {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  input:focus, select:focus { outline: 2px solid var(--main); border-color: var(--main); }
+  .hint {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+  .result {
+    margin-top: 16px;
+    padding: 16px;
+    border-radius: 8px;
+    background: var(--gold-light);
+    border: 1px solid #ecdfbb;
+  }
+  .result .rate {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--main);
+  }
+  .result .rate .unit {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-left: 4px;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    margin-top: 8px;
+  }
+  .badge.fallback { background: var(--gold-light); color: #8a6d1f; border: 1px solid var(--gold); }
+  .badge.none { background: #fdecec; color: var(--warn); border: 1px solid #f3c2c0; }
+  .calc-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .calc-row .field { flex: 1; }
+  .calc-row .sep { color: var(--muted); font-weight: 700; padding-top: 20px; }
+  .calc-unit {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .disclaimer {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border);
+  }
+  footer {
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    margin: 30px 0;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>환율조회 - 일별 매매기준율</h1>
+  <p>날짜별 매매기준율 조회 및 외화·원화 환산 도구</p>
+  <nav class="site-nav">
+    <a href="https://deoksutax777-ctrl.github.io/efin-reg-lookup/">전자금융업·부가통신 조회</a>
+    <a href="https://deoksutax777-ctrl.github.io/efin-reg-lookup/fx/" class="active">환율조회</a>
+  </nav>
+</header>
+<main>
+  <div class="card">
+    <div class="meta" id="meta-info">데이터 로딩 중...</div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="field">
+        <label for="date-input">조회일자</label>
+        <input type="date" id="date-input">
+      </div>
+      <div class="field">
+        <label for="currency-input">통화</label>
+        <select id="currency-input"></select>
+      </div>
+    </div>
+    <div class="hint">주말·공휴일 등 고시가 없는 날짜는 직전 영업일 매매기준율을 자동 적용합니다.</div>
+
+    <div class="result" id="result-box">
+      <span class="rate" id="rate-value">-</span><span class="unit" id="rate-unit"></span>
+      <div id="result-badge"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>외화·원화 환산</label>
+    <div class="calc-row">
+      <div class="field">
+        <input type="text" id="foreign-input" placeholder="0.00">
+        <div class="calc-unit" id="foreign-unit-label">USD</div>
+      </div>
+      <div class="sep">=</div>
+      <div class="field">
+        <input type="text" id="krw-input" placeholder="0">
+        <div class="calc-unit">KRW (원)</div>
+      </div>
+    </div>
+    <div class="disclaimer">
+      위 조회일자의 매매기준율을 단순 곱셈·나눗셈한 참고값입니다. 실제 세무신고에 적용할 환율(사업연도 종료일 기준율, 외화환산 방법 등)은 별도로 확인하세요.
+    </div>
+  </div>
+</main>
+<footer>제작: Deoksu Tax Firm · 김태현 세무사</footer>
+
+<script>
+const FX_DATA = {
+"period_from": "2026-01-01",
+"period_to": "2026-07-17",
+"asof": "2026-07-16",
+"rates": {
+"USD": {
+"2026-01-02": 1434.9,
+"2026-01-05": 1442.1,
+"2026-01-06": 1446.8,
+"2026-01-07": 1445.7,
+"2026-01-08": 1448.3,
+"2026-01-09": 1449.4,
+"2026-01-12": 1455.7,
+"2026-01-13": 1464.1,
+"2026-01-14": 1472.8,
+"2026-01-15": 1477.5,
+"2026-01-16": 1469.7,
+"2026-01-19": 1473.5,
+"2026-01-20": 1473.6,
+"2026-01-21": 1477.0,
+"2026-01-22": 1472.8,
+"2026-01-23": 1468.4,
+"2026-01-26": 1467.2,
+"2026-01-27": 1442.8,
+"2026-01-28": 1448.8,
+"2026-01-29": 1428.6,
+"2026-01-30": 1427.0,
+"2026-02-02": 1436.7,
+"2026-02-03": 1457.3,
+"2026-02-04": 1449.0,
+"2026-02-05": 1451.2,
+"2026-02-06": 1464.1,
+"2026-02-09": 1470.3,
+"2026-02-10": 1464.3,
+"2026-02-11": 1457.7,
+"2026-02-12": 1454.4,
+"2026-02-13": 1443.4,
+"2026-02-19": 1443.1,
+"2026-02-20": 1450.7,
+"2026-02-23": 1448.7,
+"2026-02-24": 1442.0,
+"2026-02-25": 1445.8,
+"2026-02-26": 1435.3,
+"2026-02-27": 1424.5,
+"2026-03-03": 1435.4,
+"2026-03-04": 1464.5,
+"2026-03-05": 1478.8,
+"2026-03-06": 1464.3,
+"2026-03-09": 1474.5,
+"2026-03-10": 1493.1,
+"2026-03-11": 1472.8,
+"2026-03-12": 1467.3,
+"2026-03-13": 1479.8,
+"2026-03-16": 1489.5,
+"2026-03-17": 1496.0,
+"2026-03-18": 1491.6,
+"2026-03-19": 1486.0,
+"2026-03-20": 1499.7,
+"2026-03-23": 1494.9,
+"2026-03-24": 1509.6,
+"2026-03-25": 1498.3,
+"2026-03-26": 1495.6,
+"2026-03-27": 1506.2,
+"2026-03-30": 1508.1,
+"2026-03-31": 1513.4,
+"2026-04-01": 1530.5,
+"2026-04-02": 1507.8,
+"2026-04-03": 1518.8,
+"2026-04-06": 1507.6,
+"2026-04-07": 1507.2,
+"2026-04-08": 1506.8,
+"2026-04-09": 1476.1,
+"2026-04-10": 1481.1,
+"2026-04-13": 1479.8,
+"2026-04-14": 1489.8,
+"2026-04-15": 1481.4,
+"2026-04-16": 1473.1,
+"2026-04-17": 1472.6,
+"2026-04-20": 1480.0,
+"2026-04-21": 1475.6,
+"2026-04-22": 1470.8,
+"2026-04-23": 1477.6,
+"2026-04-24": 1480.6,
+"2026-04-27": 1482.9,
+"2026-04-28": 1473.1,
+"2026-04-29": 1473.3,
+"2026-04-30": 1476.1,
+"2026-05-04": 1484.8,
+"2026-05-06": 1470.5,
+"2026-05-07": 1456.8,
+"2026-05-08": 1450.8,
+"2026-05-11": 1466.0,
+"2026-05-12": 1473.0,
+"2026-05-13": 1484.3,
+"2026-05-14": 1495.1,
+"2026-05-15": 1491.8,
+"2026-05-18": 1499.8,
+"2026-05-19": 1503.4,
+"2026-05-20": 1503.8,
+"2026-05-21": 1509.7,
+"2026-05-22": 1503.5,
+"2026-05-26": 1513.3,
+"2026-05-27": 1507.9,
+"2026-05-28": 1501.6,
+"2026-05-29": 1505.8,
+"2026-06-01": 1503.2,
+"2026-06-02": 1511.3,
+"2026-06-04": 1515.6,
+"2026-06-05": 1528.6,
+"2026-06-08": 1543.0,
+"2026-06-09": 1546.5,
+"2026-06-10": 1518.4,
+"2026-06-11": 1522.4,
+"2026-06-12": 1527.0,
+"2026-06-15": 1520.4,
+"2026-06-16": 1510.0,
+"2026-06-17": 1513.5,
+"2026-06-18": 1512.8,
+"2026-06-19": 1523.4,
+"2026-06-22": 1535.0,
+"2026-06-23": 1535.7,
+"2026-06-24": 1537.2,
+"2026-06-25": 1538.3,
+"2026-06-26": 1545.3,
+"2026-06-29": 1544.2,
+"2026-06-30": 1541.5,
+"2026-07-01": 1548.4,
+"2026-07-02": 1554.4,
+"2026-07-03": 1554.1,
+"2026-07-06": 1539.7,
+"2026-07-07": 1531.8,
+"2026-07-08": 1526.6,
+"2026-07-09": 1509.9,
+"2026-07-10": 1504.2,
+"2026-07-13": 1507.1,
+"2026-07-14": 1504.9,
+"2026-07-15": 1492.2,
+"2026-07-16": 1488.8
+}
+}
+};
+
+const dateInput = document.getElementById('date-input');
+const currencyInput = document.getElementById('currency-input');
+const rateValue = document.getElementById('rate-value');
+const rateUnit = document.getElementById('rate-unit');
+const resultBadge = document.getElementById('result-badge');
+const foreignInput = document.getElementById('foreign-input');
+const krwInput = document.getElementById('krw-input');
+const foreignUnitLabel = document.getElementById('foreign-unit-label');
+const metaInfo = document.getElementById('meta-info');
+
+let currentRate = null;
+let isSyncing = false;
+
+function initMeta() {
+  metaInfo.innerHTML = `<b>데이터 기준일:</b> ${FX_DATA.asof} 고시분까지 (기간 ${FX_DATA.period_from} ~ ${FX_DATA.period_to}) · 자료: 서울외국환중개 · 이후 갱신분은 원본 엑셀 재반영 필요`;
+}
+
+function initCurrencySelect() {
+  const codes = Object.keys(FX_DATA.rates);
+  currencyInput.innerHTML = codes.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+function initDate() {
+  const dates = Object.keys(FX_DATA.rates[currencyInput.value] || {}).sort();
+  dateInput.min = dates[0];
+  dateInput.max = FX_DATA.period_to;
+  dateInput.value = dates[dates.length - 1];
+}
+
+function resolveRate(code, dateStr) {
+  const table = FX_DATA.rates[code] || {};
+  const dates = Object.keys(table).sort();
+  if (!dates.length) return { status: 'none' };
+  if (dateStr < dates[0]) return { status: 'none' };
+  if (table[dateStr] !== undefined) {
+    return { status: 'exact', date: dateStr, rate: table[dateStr] };
+  }
+  // 직전 영업일 탐색 (최대 10일 역순) — toISOString은 UTC 변환으로 KST에서 하루 밀리므로 로컬 날짜로 조립
+  const d = new Date(dateStr + 'T00:00:00');
+  for (let i = 1; i <= 10; i++) {
+    d.setDate(d.getDate() - 1);
+    const cand = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (cand < dates[0]) break;
+    if (table[cand] !== undefined) {
+      return { status: 'fallback', date: cand, requested: dateStr, rate: table[cand] };
+    }
+  }
+  return { status: 'unpublished', requested: dateStr };
+}
+
+function fmt(n, digits) {
+  return n.toLocaleString('ko-KR', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+function updateResult() {
+  const code = currencyInput.value;
+  const dateStr = dateInput.value;
+  foreignUnitLabel.textContent = code;
+  const r = resolveRate(code, dateStr);
+
+  if (r.status === 'none') {
+    currentRate = null;
+    rateValue.textContent = '데이터 없음';
+    rateUnit.textContent = '';
+    resultBadge.innerHTML = `<span class="badge none">스냅샷 범위 밖 (${FX_DATA.period_from} ~ ${FX_DATA.period_to})</span>`;
+  } else if (r.status === 'unpublished') {
+    currentRate = null;
+    rateValue.textContent = '미고시';
+    rateUnit.textContent = '';
+    resultBadge.innerHTML = `<span class="badge none">아직 고시되지 않은 날짜입니다</span>`;
+  } else {
+    currentRate = r.rate;
+    rateValue.textContent = fmt(r.rate, 2);
+    rateUnit.textContent = `원 / 1 ${code}`;
+    if (r.status === 'fallback') {
+      resultBadge.innerHTML = `<span class="badge fallback">${r.requested} 고시 없음 → 직전 영업일 ${r.date} 기준율 적용</span>`;
+    } else {
+      resultBadge.innerHTML = '';
+    }
+  }
+  syncFromForeign();
+}
+
+function syncFromForeign() {
+  if (isSyncing || currentRate === null) return;
+  isSyncing = true;
+  const v = parseFloat(foreignInput.value.replace(/,/g, ''));
+  if (!isNaN(v)) {
+    krwInput.value = fmt(Math.round(v * currentRate), 0);
+  }
+  isSyncing = false;
+}
+
+foreignInput.addEventListener('input', () => {
+  if (isSyncing || currentRate === null) return;
+  isSyncing = true;
+  const v = parseFloat(foreignInput.value.replace(/,/g, ''));
+  krwInput.value = isNaN(v) ? '' : fmt(Math.round(v * currentRate), 0);
+  isSyncing = false;
+});
+
+krwInput.addEventListener('input', () => {
+  if (isSyncing || currentRate === null) return;
+  isSyncing = true;
+  const v = parseFloat(krwInput.value.replace(/,/g, ''));
+  foreignInput.value = isNaN(v) ? '' : fmt(v / currentRate, 2);
+  isSyncing = false;
+});
+
+dateInput.addEventListener('change', updateResult);
+currencyInput.addEventListener('change', () => { initDate(); updateResult(); });
+
+initMeta();
+initCurrencySelect();
+initDate();
+updateResult();
+</script>
+</body>
+</html>
