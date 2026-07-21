@@ -642,7 +642,11 @@ let currentUnit = 1;
 let isSyncing = false;
 
 function initMeta() {
-  metaInfo.innerHTML = `<b>데이터 기준일:</b> ${FX_DATA.asof} 고시분까지 (기간 ${FX_DATA.period_from} ~ ${FX_DATA.period_to}) · 자료: 서울외국환중개 · 이후 갱신분은 원본 엑셀 재반영 필요`;
+  const parts = Object.keys(FX_DATA.rates).map(c => {
+    const dates = Object.keys(FX_DATA.rates[c]).sort();
+    return `<b>${c}</b> ${dates[0]} ~ ${dates[dates.length - 1]}`;
+  });
+  metaInfo.innerHTML = `<b>보유 데이터:</b> ${parts.join(' · ')} · 자료: 서울외국환중개 · 이후 갱신분은 원본 엑셀 재반영 필요`;
 }
 
 function initCurrencySelect() {
@@ -661,7 +665,9 @@ function resolveRate(code, dateStr) {
   const table = FX_DATA.rates[code] || {};
   const dates = Object.keys(table).sort();
   if (!dates.length) return { status: 'none' };
-  if (dateStr < dates[0]) return { status: 'none' };
+  const first = dates[0], last = dates[dates.length - 1];
+  if (dateStr < first) return { status: 'none', first, last };
+  if (dateStr > last) return { status: 'stale', requested: dateStr, last };
   if (table[dateStr] !== undefined) {
     return { status: 'exact', date: dateStr, rate: table[dateStr] };
   }
@@ -693,7 +699,12 @@ function updateResult() {
     currentRate = null;
     rateValue.textContent = '데이터 없음';
     rateUnit.textContent = '';
-    resultBadge.innerHTML = `<span class="badge none">스냅샷 범위 밖 (${FX_DATA.period_from} ~ ${FX_DATA.period_to})</span>`;
+    resultBadge.innerHTML = `<span class="badge none">${code} 스냅샷 범위 밖 (보유: ${r.first} ~ ${r.last})</span>`;
+  } else if (r.status === 'stale') {
+    currentRate = null;
+    rateValue.textContent = '미반영';
+    rateUnit.textContent = '';
+    resultBadge.innerHTML = `<span class="badge none">${code} 스냅샷 최신분(${r.last}) 이후 날짜입니다 — 원본 엑셀 갱신 필요</span>`;
   } else if (r.status === 'unpublished') {
     currentRate = null;
     rateValue.textContent = '미고시';
