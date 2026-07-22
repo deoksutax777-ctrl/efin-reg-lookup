@@ -84,7 +84,7 @@
     flex-wrap: wrap;
   }
   .field { flex: 1; min-width: 160px; }
-  input[type="date"], input[type="text"], select {
+  input[type="date"], input[type="text"], select, textarea {
     width: 100%;
     padding: 9px 12px;
     border: 1px solid var(--border);
@@ -92,7 +92,8 @@
     font-size: 14px;
     font-family: inherit;
   }
-  input:focus, select:focus { outline: 2px solid var(--main); border-color: var(--main); }
+  textarea { resize: vertical; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--main); border-color: var(--main); }
   .hint {
     font-size: 12px;
     color: var(--muted);
@@ -140,6 +141,40 @@
     color: var(--muted);
     margin-top: 4px;
   }
+  table.multi {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+    font-size: 13.5px;
+  }
+  table.multi th {
+    background: var(--main);
+    color: #fff;
+    padding: 7px 10px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12.5px;
+  }
+  table.multi td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  table.multi td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--main); }
+  table.multi td.err { color: var(--warn); font-size: 12.5px; }
+  table.multi td.note { color: var(--muted); font-size: 12px; }
+  .copy-btn {
+    margin-top: 10px;
+    padding: 7px 14px;
+    border: 1px solid var(--main);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--main);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .copy-btn:hover { background: var(--main-light); }
   .disclaimer {
     font-size: 12px;
     color: var(--muted);
@@ -186,6 +221,13 @@
       <span class="rate" id="rate-value">-</span><span class="unit" id="rate-unit"></span>
       <div id="result-badge"></div>
     </div>
+  </div>
+
+  <div class="card">
+    <label for="multi-input">여러 날짜 일괄조회</label>
+    <textarea id="multi-input" rows="3" placeholder="예: 2026-07-01, 2026.7.10 20260715 (쉼표·공백·줄바꿈으로 구분)"></textarea>
+    <div class="hint">위에서 선택한 통화 기준으로 한번에 조회합니다. 주말·공휴일은 직전 영업일 기준율을 자동 적용합니다.</div>
+    <div id="multi-result"></div>
   </div>
 
   <div class="card">
@@ -750,6 +792,64 @@ krwInput.addEventListener('input', () => {
   isSyncing = false;
 });
 
+const multiInput = document.getElementById('multi-input');
+const multiResult = document.getElementById('multi-result');
+let multiCopyText = '';
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function parseDateToken(tok) {
+  let t = tok;
+  if (/^\d{8}$/.test(t)) t = t.slice(0, 4) + '-' + t.slice(4, 6) + '-' + t.slice(6, 8);
+  const m = t.replace(/[./]/g, '-').match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!m) return null;
+  const mo = parseInt(m[2], 10), da = parseInt(m[3], 10);
+  if (mo < 1 || mo > 12 || da < 1 || da > 31) return null;
+  return `${m[1]}-${String(mo).padStart(2, '0')}-${String(da).padStart(2, '0')}`;
+}
+
+function updateMulti() {
+  const tokens = multiInput.value.split(/[\s,;]+/).filter(Boolean);
+  if (!tokens.length) { multiResult.innerHTML = ''; multiCopyText = ''; return; }
+
+  const code = currencyInput.value;
+  const unit = FX_DATA.units[code] || 1;
+  const tsv = [`조회일자\t적용일\t매매기준율(원/${unit} ${code})`];
+  const rows = tokens.map(tok => {
+    const date = parseDateToken(tok);
+    if (!date) return `<tr><td>${escapeHtml(tok)}</td><td colspan="3" class="err">날짜 형식 오류</td></tr>`;
+    const r = resolveRate(code, date);
+    if (r.status === 'exact' || r.status === 'fallback') {
+      tsv.push(`${date}\t${r.date}\t${r.rate}`);
+      const note = r.status === 'fallback' ? `직전 영업일 적용` : '';
+      return `<tr><td>${date}</td><td>${r.date}</td><td class="num">${fmt(r.rate, 2)}</td><td class="note">${note}</td></tr>`;
+    }
+    const msg = r.status === 'stale' ? `스냅샷 최신분(${r.last}) 이후 — 갱신 필요`
+      : r.status === 'unpublished' ? '미고시'
+      : `스냅샷 범위 밖 (보유: ${r.first} ~ ${r.last})`;
+    return `<tr><td>${date}</td><td colspan="3" class="err">${msg}</td></tr>`;
+  });
+
+  multiCopyText = tsv.length > 1 ? tsv.join('\n') : '';
+  multiResult.innerHTML =
+    `<table class="multi"><thead><tr><th>조회일자</th><th>적용일</th><th>매매기준율 (원/${unit} ${code})</th><th>비고</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
+    + (multiCopyText ? `<button type="button" class="copy-btn" id="multi-copy-btn">표 복사 (엑셀 붙여넣기용)</button>` : '');
+
+  const btn = document.getElementById('multi-copy-btn');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(multiCopyText).then(() => {
+        btn.textContent = '복사됨!';
+        setTimeout(() => { btn.textContent = '표 복사 (엑셀 붙여넣기용)'; }, 1500);
+      });
+    });
+  }
+}
+
+multiInput.addEventListener('input', updateMulti);
+
 function initPeriod() {
   const dates = Object.keys(FX_DATA.rates[currencyInput.value] || {}).sort();
   periodFromInput.min = periodToInput.min = dates[0];
@@ -793,7 +893,7 @@ function updatePeriodAverage() {
 }
 
 dateInput.addEventListener('change', updateResult);
-currencyInput.addEventListener('change', () => { initDate(); updateResult(); initPeriod(); updatePeriodAverage(); });
+currencyInput.addEventListener('change', () => { initDate(); updateResult(); initPeriod(); updatePeriodAverage(); updateMulti(); });
 periodFromInput.addEventListener('change', updatePeriodAverage);
 periodToInput.addEventListener('change', updatePeriodAverage);
 
